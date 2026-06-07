@@ -34,6 +34,15 @@ go mod init github.com/yourname/go-rest-api
 go mod tidy
 ```
 
+この 3 つの意味:
+
+- `mise install`
+  - `mise.toml` を見て、この repo で使う Go を入れる
+- `go mod init ...`
+  - ルートを 1 つの Go プロジェクトとして初期化する
+- `go mod tidy`
+  - import に応じて依存関係を整理する
+
 ## 完成版を動かしたい場合
 
 ```bash

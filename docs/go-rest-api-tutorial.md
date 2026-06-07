@@ -69,11 +69,31 @@ mise --version
 
 このリポジトリには [mise.toml](../mise.toml) があり、Go のバージョンは `1.26.4` に固定しています。
 
+ここで `mise` を使う理由は、学習中の Go バージョン差異を消したいからです。
+Go は標準ライブラリの振る舞いや `go` コマンドの挙動がバージョンで少しずつ変わります。
+教材と手元のバージョンがずれると、「自分のコードが悪いのか、バージョン差分なのか」が切り分けにくくなります。
+
 ### 3-2. Go をインストールする
 
 ```bash
 mise install
 ```
+
+このコマンドで Go が入る理由は、ルートの [mise.toml](../mise.toml) に次が書いてあるからです。
+
+```toml
+[tools]
+go = "1.26.4"
+```
+
+`mise install` は「今いるディレクトリの `mise.toml` を読んで、そこに書かれたツールを入れる」コマンドです。
+つまり、ここでは明示的に `go` を引数で渡していなくても問題ありません。
+
+これをやらないと困ること:
+
+- `go` コマンド自体が使えない
+- 教材どおりに進めても、ローカルの Go バージョン差分で挙動がずれる
+- `go test` の失敗原因がコードではなく環境かもしれなくなる
 
 シェル統合がまだなら、通常は `~/.zshrc` に次を入れます。
 
@@ -91,6 +111,24 @@ go mod init github.com/yourname/go-rest-api
 
 練習用なので module 名は厳密でなくて構いません。
 ただし、GitHub に置く前提なら `github.com/<yourname>/<repo>` 形式にしておくのが一般的です。
+
+このコマンドの目的は 3 つあります。
+
+- このルートを 1 つの Go プロジェクトとして宣言する
+- `go.mod` を作って依存管理の起点にする
+- 自分の package を import するときの基準名を決める
+
+たとえば module 名を `github.com/yourname/go-rest-api` にすると、ルート配下の package はこう import されます。
+
+```go
+import "github.com/yourname/go-rest-api/internal/task"
+```
+
+これをやらないと困ること:
+
+- `go test ./...` を「このプロジェクト全体」に対して素直に回しづらい
+- `internal/task` などを import するときの基準パスが決まらない
+- `go mod tidy` で何を依存として管理するか決められない
 
 ### 3-4. ディレクトリを確認する
 
@@ -114,6 +152,15 @@ go mod tidy
 ```
 
 `go.mod` は Python の `pyproject.toml` や `requirements.txt` に近い役割です。
+`go mod tidy` は「使っている import を見て、必要な依存だけを `go.mod` / `go.sum` に反映する」コマンドです。
+
+これをやる理由:
+
+- 依存の入れ忘れを防ぐ
+- 逆に不要になった依存を消せる
+- 他の人が clone したときに、同じ依存セットを復元しやすくなる
+
+Go では package manager に個別 install するより、「コードを書いてから `go mod tidy` で整える」流れがかなり一般的です。
 
 ## 4. 先に押さえる Go 文法
 
@@ -306,10 +353,22 @@ Go の変数にはデフォルト値があります。
 - まだ実装していないので失敗させる
 - compile error でも最初の失敗としては許容
 
+なぜ先に失敗させるのか:
+
+- 何を固定したいかを先に言語化できる
+- 実装に引きずられず、外から見た振る舞いを先に決められる
+- 後から「何となく通ったコード」ではなく「このテストを通すためのコード」になる
+
 ### 5-2. `Green`
 
 - テストを通す最小限の実装を書く
 - 先回りして機能を盛らない
+
+なぜ最小限にするのか:
+
+- 最初から設計を広げると、何が本当に必要か見えにくくなる
+- Go は書けることが多いが、最初の一歩を小さくした方が責務分離を学びやすい
+- 不要な抽象化を減らせる
 
 ### 5-3. `Refactor`
 
@@ -317,6 +376,9 @@ Go の変数にはデフォルト値があります。
 - 命名を整える
 - 責務の位置を見直す
 - テストを壊さずに構造だけよくする
+
+ここで重要なのは、「機能追加」と「設計改善」を分けることです。
+Python だと実装しながら同時に整えたくなりがちですが、TDD では Green と Refactor を分けた方が判断がぶれません。
 
 ### 5-4. この教材のテスト戦略
 
@@ -346,6 +408,12 @@ Go の変数にはデフォルト値があります。
 この段階ではまだテストを書かなくて構いません。
 ここは TDD の前提準備です。
 
+理由:
+
+- `go mod init` 前は、そもそも Go プロジェクトとしての単位が未確定
+- package を切る場所と import path が未確定な状態でテストを書くと、失敗理由が環境と設計で混ざる
+- まずは「テストを実行できる土台」だけ先に作る
+
 ### 6-2. イテレーション 1: `Task` の作成ルールを UT で決める
 
 最初に書くテスト:
@@ -365,6 +433,12 @@ func TestCreateTask_ValidInput_ReturnsCreatedTask(t *testing.T)
 この時点では compile error でも大丈夫です。
 `Task`, `CreateInput`, `Manager`, `Repository` がまだ無いからです。
 
+最初に service から始める理由:
+
+- domain ルールが一番変わりやすく、一番先に固定したいから
+- HTTP や DB をまだ考えなくてよいので、Go の基本文法に集中できるから
+- Python 経験者でも「入力を受けて値を返す」層は理解しやすいから
+
 `Green` で実装する場所:
 
 - `internal/task/task.go`
@@ -377,6 +451,9 @@ func TestCreateTask_ValidInput_ReturnsCreatedTask(t *testing.T)
 - method
 - `time.Time`
 - `context.Context`
+
+この段階では repository は stub で十分です。
+実 DB をつなぐのはまだ早く、今は「Task をどう作るべきか」という業務ルールだけを固定するのが目的です。
 
 完成版の参照:
 
@@ -411,6 +488,11 @@ func TestListTasks_EmptyLimit_UsesDefaultLimit(t *testing.T)
 - validation を handler ではなく service / domain 側に寄せる
 - 既定値ロジックを一箇所にまとめる
 
+この順番にする理由:
+
+- 作成成功系だけ先に通してから、失敗系を足した方が流れを追いやすい
+- いきなり正常系と異常系を全部入れると、Go の型と error 処理に慣れる前に情報量が増えすぎる
+
 ### 6-4. イテレーション 3: handler の JSON 変換を UT で決める
 
 次は HTTP 層に入ります。
@@ -432,6 +514,11 @@ func TestListTasks_ValidQuery_ReturnsTasks(t *testing.T)
 `Green` で実装する場所:
 
 - `internal/api/handler.go`
+
+ここで初めて HTTP 層に行く理由:
+
+- service の契約が先に固まっていれば、handler は「HTTP と service の変換」に専念できる
+- 逆に service が曖昧なまま handler を書くと、どこに validation を置くかがぶれやすい
 
 ここで学ぶこと:
 
@@ -470,6 +557,11 @@ func TestListTasks_ValidQuery_ReturnsTasks(t *testing.T)
 
 実務でも最初から全 endpoint を広げるより、縦に 1 本通してから広げる方が安全です。
 
+ここで大きいテストを増やしすぎない理由:
+
+- router は配線の色が強く、service ほどロジックの中心ではない
+- 先に handler の責務を固めてから router を載せた方が、失敗原因を追いやすい
+
 完成版の参照:
 
 - [internal/api/router.go](../reference/complete-app/internal/api/router.go)
@@ -494,6 +586,11 @@ func TestTaskLifecycle_SQLiteBackedAPI_WorksEndToEnd(t *testing.T)
 
 最初は当然失敗します。
 repository も DB 初期化もまだ無いからです。
+
+ここで初めて IT に行く理由:
+
+- 内側の振る舞いが UT で固まったあとに、結合点の不整合だけを見たいから
+- 最初から DB をつなぐと、「Go 文法の理解」と「DB 連携の問題」が混ざって学習効率が落ちるから
 
 `Green` で実装する場所:
 
@@ -532,6 +629,12 @@ repository も DB 初期化もまだ無いからです。
 これは実務でもよくある「仕様追加時の縦切り変更」です。
 1 本の failing integration test から入ると、全体の接続ミスを見つけやすいです。
 
+この段階で学ぶこと:
+
+- pointer を使った partial update
+- not found の扱い
+- service / repository / handler をまたぐ変更
+
 ### 6-8. イテレーション 7: `main.go` と設定を仕上げる
 
 最後にアプリ起動まで通します。
@@ -552,6 +655,12 @@ repository も DB 初期化もまだ無いからです。
 ここは厳密な TDD がやややりづらい箇所です。
 そのため、この教材では「内側は TDD、配線の最後だけ薄く実装」で進めます。
 実務でもこの割り切りは普通にあります。
+
+理由:
+
+- `main.go` はロジックというより wiring の責務が中心
+- テスト可能性より、読みやすく薄く保つことの方が重要
+- ここまでで内側の振る舞いが固まっていれば、最後の配線は比較的安全に進められる
 
 完成版の参照:
 
@@ -605,6 +714,9 @@ repository も DB 初期化もまだ無いからです。
 ## 8. 実行コマンド
 
 イテレーションごとに、まず変更範囲だけ回します。
+
+これは実務でも重要です。
+毎回いきなり全部回すより、まず変更箇所に近いテストを回した方がフィードバックが速く、失敗原因も追いやすいです。
 
 ### 8-1. service を触ったとき
 
